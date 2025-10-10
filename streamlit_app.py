@@ -974,7 +974,7 @@ with st.sidebar:
     )
     extra_guidance = st.text_area(
         "Optional: add run-specific guidance",
-        placeholder="e.g., compare briefly with HPE/Lenovo alternatives; highlight on-prem + hybrid specifics"
+        placeholder="e.g., compare briefly with alternatives; highlight specifics"
     )
 
     # Build the final system prompt for this run
@@ -1075,156 +1075,156 @@ with tabs[0]:
 
 # ---- Batch Tab ----
 # with tabs[1]:
-    st.subheader("Batch summarize (upload CSV with a 'url' column)")
-    up = st.file_uploader("Upload CSV", type=["csv"])
-    max_rows = st.number_input("Max rows to process", min_value=1, max_value=2000, value=50, step=1)
-    run_batch = st.button("Run Batch", type="primary")
+    # st.subheader("Batch summarize (upload CSV with a 'url' column)")
+    # up = st.file_uploader("Upload CSV", type=["csv"])
+    # max_rows = st.number_input("Max rows to process", min_value=1, max_value=2000, value=50, step=1)
+    # run_batch = st.button("Run Batch", type="primary")
 
-    if run_batch:
-        if not base_url or not base_url.endswith("/v1"):
-            st.error("Base URL must end with /v1.")
-        elif hdrs is None:
-            st.error("Fix header configuration errors in the sidebar.")
-        elif not up:
-            st.warning("Please upload a CSV file.")
-        else:
-            import pandas as pd
-            try:
-                df = pd.read_csv(up)
-            except Exception:
-                up.seek(0)
-                df = pd.read_csv(up, encoding="latin-1")
-            if "url" not in df.columns:
-                st.error("CSV must contain a 'url' column.")
-            else:
-                df = df.head(int(max_rows)).copy()
-                results: List[ExecSummary] = []
-                prog = st.progress(0.0, text="Processing...")
-                for i, row in df.iterrows():
-                    u = str(row["url"]).strip()
-                    if not u:
-                        continue
-                    if not is_domain_allowed(u, allowed_domains):
-                        results.append(ExecSummary(
-                            url=u, title=None, product=None,
-                            executive_summary="Skipped (domain not allowed).",
-                            key_highlights=[], resources_note=None, sample_resources=[]
-                        ))
-                        prog.progress((i + 1) / len(df))
-                        continue
-                    try:
-                        r = summarize_url(
-                            url=u,
-                            model=model,
-                            base_url=base_url,
-                            headers=hdrs,
-                            verify_param=verify_param,
-                            timeout_seconds=int(timeout_seconds),
-                            system_prompt=system_prompt,  # <-- reuse selected audience across batch
-                        )
-                        results.append(r)
-                    except Exception as e:
-                        results.append(ExecSummary(
-                            url=u, title=None, product=None,
-                            executive_summary=f"Error: {e}",
-                            key_highlights=[], resources_note=None, sample_resources=[]
-                        ))
-                    prog.progress((i + 1) / len(df))
+    # if run_batch:
+    #     if not base_url or not base_url.endswith("/v1"):
+    #         st.error("Base URL must end with /v1.")
+    #     elif hdrs is None:
+    #         st.error("Fix header configuration errors in the sidebar.")
+    #     elif not up:
+    #         st.warning("Please upload a CSV file.")
+    #     else:
+    #         import pandas as pd
+    #         try:
+    #             df = pd.read_csv(up)
+    #         except Exception:
+    #             up.seek(0)
+    #             df = pd.read_csv(up, encoding="latin-1")
+    #         if "url" not in df.columns:
+    #             st.error("CSV must contain a 'url' column.")
+    #         else:
+    #             df = df.head(int(max_rows)).copy()
+    #             results: List[ExecSummary] = []
+    #             prog = st.progress(0.0, text="Processing...")
+    #             for i, row in df.iterrows():
+    #                 u = str(row["url"]).strip()
+    #                 if not u:
+    #                     continue
+    #                 if not is_domain_allowed(u, allowed_domains):
+    #                     results.append(ExecSummary(
+    #                         url=u, title=None, product=None,
+    #                         executive_summary="Skipped (domain not allowed).",
+    #                         key_highlights=[], resources_note=None, sample_resources=[]
+    #                     ))
+    #                     prog.progress((i + 1) / len(df))
+    #                     continue
+    #                 try:
+    #                     r = summarize_url(
+    #                         url=u,
+    #                         model=model,
+    #                         base_url=base_url,
+    #                         headers=hdrs,
+    #                         verify_param=verify_param,
+    #                         timeout_seconds=int(timeout_seconds),
+    #                         system_prompt=system_prompt,  # <-- reuse selected audience across batch
+    #                     )
+    #                     results.append(r)
+    #                 except Exception as e:
+    #                     results.append(ExecSummary(
+    #                         url=u, title=None, product=None,
+    #                         executive_summary=f"Error: {e}",
+    #                         key_highlights=[], resources_note=None, sample_resources=[]
+    #                     ))
+    #                 prog.progress((i + 1) / len(df))
 
-                # Show table
-                out = []
-                for r in results:
-                    out.append({
-                        "url": r.url,
-                        "title": r.title or "",
-                        "product": r.product or "",
-                        "executive_summary": r.executive_summary,
-                        "key_highlights": "\n".join(r.key_highlights),
-                        "resources_note": r.resources_note or "",
-                        "sample_resources": "\n".join(r.sample_resources),
-                    })
-                out_df = pd.DataFrame(out)
-                st.dataframe(out_df, use_container_width=True, hide_index=True)
+    #             # Show table
+    #             out = []
+    #             for r in results:
+    #                 out.append({
+    #                     "url": r.url,
+    #                     "title": r.title or "",
+    #                     "product": r.product or "",
+    #                     "executive_summary": r.executive_summary,
+    #                     "key_highlights": "\n".join(r.key_highlights),
+    #                     "resources_note": r.resources_note or "",
+    #                     "sample_resources": "\n".join(r.sample_resources),
+    #                 })
+    #             out_df = pd.DataFrame(out)
+    #             st.dataframe(out_df, use_container_width=True, hide_index=True)
 
-                # Downloads
-                csv_bytes = out_df.to_csv(index=False).encode("utf-8")
-                st.download_button("⬇️ Download CSV", data=csv_bytes, file_name="summaries.csv", mime="text/csv")
+    #             # Downloads
+    #             csv_bytes = out_df.to_csv(index=False).encode("utf-8")
+    #             st.download_button("⬇️ Download CSV", data=csv_bytes, file_name="summaries.csv", mime="text/csv")
 
-                doc_bytes = build_docx(results)
-                st.download_button("⬇️ Download combined DOCX", data=doc_bytes,
-                    file_name="summaries.docx",
-    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    #             doc_bytes = build_docx(results)
+    #             st.download_button("⬇️ Download combined DOCX", data=doc_bytes,
+    #                 file_name="summaries.docx",
+    # mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 # ---- Gap analysis (dev) tab ----
 # with tabs[2]:
-    st.subheader("Gap analysis / Page diagnostics (dev)")
-    ga_url = st.text_input("Page URL (dev analysis)", placeholder="https://www.dell.com/...")
-    colA, colB = st.columns(2)
-    with colA:
-        enable_js_render = st.checkbox(
-            "Render JS if page looks client-side (Playwright)",
-            value=False,
-            help="Requires playwright installed; used only for this dev analysis."
-        )
-    with colB:
-        ga_btn = st.button("Run gap analysis", type="secondary")
+    # st.subheader("Gap analysis / Page diagnostics (dev)")
+    # ga_url = st.text_input("Page URL (dev analysis)", placeholder="https://www.dell.com/...")
+    # colA, colB = st.columns(2)
+    # with colA:
+    #     enable_js_render = st.checkbox(
+    #         "Render JS if page looks client-side (Playwright)",
+    #         value=False,
+    #         help="Requires playwright installed; used only for this dev analysis."
+    #     )
+    # with colB:
+    #     ga_btn = st.button("Run gap analysis", type="secondary")
 
-    if ga_btn:
-        if not ga_url:
-            st.warning("Please provide a URL.")
-        elif not is_domain_allowed(ga_url, allowed_domains):
-            st.error(f"URL domain is not in the allowlist: {allowed_domains}")
-        else:
-            # 1) fetch static
-            try:
-                final_url, html = fetch_url(ga_url, timeout=20, verify=verify_param)
-            except Exception as e:
-                st.error("Fetch failed.")
-                st.exception(e)
-                html = ""
-                final_url = ga_url
+    # if ga_btn:
+    #     if not ga_url:
+    #         st.warning("Please provide a URL.")
+    #     elif not is_domain_allowed(ga_url, allowed_domains):
+    #         st.error(f"URL domain is not in the allowlist: {allowed_domains}")
+    #     else:
+    #         # 1) fetch static
+    #         try:
+    #             final_url, html = fetch_url(ga_url, timeout=20, verify=verify_param)
+    #         except Exception as e:
+    #             st.error("Fetch failed.")
+    #             st.exception(e)
+    #             html = ""
+    #             final_url = ga_url
 
-            # 2) quick quality check
-            if html:
-                qa = analyze_html_quality(html, final_url)
-                need_render = (qa["word_count"] < 150) or (qa["text_html_ratio"] < 0.05)
-            else:
-                qa, need_render = None, False
+    #         # 2) quick quality check
+    #         if html:
+    #             qa = analyze_html_quality(html, final_url)
+    #             need_render = (qa["word_count"] < 150) or (qa["text_html_ratio"] < 0.05)
+    #         else:
+    #             qa, need_render = None, False
 
-            # 3) optional render pass (dev only)
-            if enable_js_render and need_render:
-                try:
-                    final_url, html = fetch_url_rendered(final_url, timeout=25, ignore_https_errors=(verify_param is False))
-                    qa = analyze_html_quality(html, final_url)
-                    st.info("Rendered DOM fetched for analysis.")
-                except Exception as e:
-                    st.warning("JS rendering failed; showing static analysis.")
-                    st.exception(e)
+    #         # 3) optional render pass (dev only)
+    #         if enable_js_render and need_render:
+    #             try:
+    #                 final_url, html = fetch_url_rendered(final_url, timeout=25, ignore_https_errors=(verify_param is False))
+    #                 qa = analyze_html_quality(html, final_url)
+    #                 st.info("Rendered DOM fetched for analysis.")
+    #             except Exception as e:
+    #                 st.warning("JS rendering failed; showing static analysis.")
+    #                 st.exception(e)
 
-            # 4) render report
-            if html:
-                if not qa:
-                    qa = analyze_html_quality(html, final_url)
+    #         # 4) render report
+    #         if html:
+    #             if not qa:
+    #                 qa = analyze_html_quality(html, final_url)
 
-                st.markdown("### Gap analysis report")
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Words", qa["word_count"])
-                c2.metric("Text/HTML", f"{qa['text_html_ratio']:.2%}")
-                c3.metric("Schema types", len(qa["schema_types"]))
-                c4.metric("Issues", len(qa["issues"]) + len(qa["warnings"]))
+    #             st.markdown("### Gap analysis report")
+    #             c1, c2, c3, c4 = st.columns(4)
+    #             c1.metric("Words", qa["word_count"])
+    #             c2.metric("Text/HTML", f"{qa['text_html_ratio']:.2%}")
+    #             c3.metric("Schema types", len(qa["schema_types"]))
+    #             c4.metric("Issues", len(qa["issues"]) + len(qa["warnings"]))
 
-                if qa["issues"]:
-                    st.error("**Critical issues:**\n\n- " + "\n- ".join(qa["issues"]))
-                if qa["warnings"]:
-                    st.warning("**Warnings:**\n\n- " + "\n- ".join(qa["warnings"]))
-                if qa["info"]:
-                    st.info("**Info:**\n\n- " + "\n- ".join(qa["info"]))
+    #             if qa["issues"]:
+    #                 st.error("**Critical issues:**\n\n- " + "\n- ".join(qa["issues"]))
+    #             if qa["warnings"]:
+    #                 st.warning("**Warnings:**\n\n- " + "\n- ".join(qa["warnings"]))
+    #             if qa["info"]:
+    #                 st.info("**Info:**\n\n- " + "\n- ".join(qa["info"]))
 
-                with st.expander("Samples / context", expanded=False):
-                    st.json(qa["samples"])
+    #             with st.expander("Samples / context", expanded=False):
+    #                 st.json(qa["samples"])
 
-                st.download_button(
-                    "⬇️ Download gap report (JSON)",
-                    data=json.dumps(qa, indent=2).encode("utf-8"),
-                    file_name="gap_report.json",
-                    mime="application/json",
-                )
+    #             st.download_button(
+    #                 "⬇️ Download gap report (JSON)",
+    #                 data=json.dumps(qa, indent=2).encode("utf-8"),
+    #                 file_name="gap_report.json",
+    #                 mime="application/json",
+    #             )
