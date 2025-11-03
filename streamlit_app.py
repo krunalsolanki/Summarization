@@ -994,15 +994,15 @@ with tabs[0]:
     run_btn = st.button("Summarize", type="primary")
 
     if run_btn:
-        if not url:
-            st.warning("Please provide a URL.")
-        elif not base_url or not base_url.endswith("/v1"):
-            st.error("Base URL must end with /v1 (e.g., https://host/v1 or http://host:port/v1)")
-        elif hdrs is None:
-            st.error("Fix header configuration errors in the sidebar.")
-        elif not is_domain_allowed(url, allowed_domains):
-            st.error(f"URL domain is not in the allowlist: {allowed_domains}")
-        else:
+        # if not url:
+        #     st.warning("Please provide a URL.")
+        # elif not base_url or not base_url.endswith("/v1"):
+        #     st.error("Base URL must end with /v1 (e.g., https://host/v1 or http://host:port/v1)")
+        # elif hdrs is None:
+        #     st.error("Fix header configuration errors in the sidebar.")
+        # elif not is_domain_allowed(url, allowed_domains):
+        #     st.error(f"URL domain is not in the allowlist: {allowed_domains}")
+        # else:
             res = None
             with st.status("Fetching and summarizing...", expanded=True) as status:
                 # 1) Upstream steps (fetch + extraction)
