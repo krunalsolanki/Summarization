@@ -4,10 +4,8 @@ import io
 import json
 import time
 import hashlib
-import json as _json
 from typing import List, Tuple, Optional, Dict
 from urllib.parse import urljoin, urlparse
-import json as _json
 from typing import Any
 import streamlit as st
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
@@ -16,7 +14,6 @@ from dotenv import load_dotenv
 from docx import Document as DocxDocument
 from docx.shared import Pt
 import requests
-from bs4 import BeautifulSoup, Tag
 
 
 # Try to reuse your working llm_client.py (optional)
@@ -635,55 +632,6 @@ def call_llm(
             max_output_tokens=max_output_tokens,
         )
 
-    if _HAS_LLM_CLIENT:
-        # Prepare auth/header mapping for llm_client
-        api_key = None
-        extra_headers = dict(headers or {})
-        auth = extra_headers.get("Authorization")
-        if auth and auth.startswith("Bearer "):
-            api_key = auth.split(" ", 1)[1]
-            # llm_client builds its own Authorization header when api_key is provided,
-            # so remove our copy to avoid duplicates.
-            del extra_headers["Authorization"]
-
-        # Mirror TLS on/off to llm_client (reads VERIFY_SSL)
-        if verify_param is False:
-            os.environ["VERIFY_SSL"] = "false"
-        else:
-            os.environ["VERIFY_SSL"] = "true"
-
-        api_url = base_url.rstrip("/") + "/chat/completions"
-        try:
-            return chat_completions(
-                api_url=api_url,
-                api_key=api_key,
-                model=model,
-                messages=messages,
-                stream=False,                 # return a single string
-                temperature=0.2,
-                top_p=1.0,
-                max_tokens=max_output_tokens,
-                timeout_seconds=timeout_seconds,
-                organization_id=None,         # set if needed
-                additional_headers=extra_headers or None,
-                max_retries=3,
-                retry_backoff=1.5,
-            )
-        except (LLMHTTPError, requests.RequestException) as e:
-            raise RuntimeError(f"LLM call failed via llm_client: {e}")
-
-    # Fallback to the existing implementation
-    return call_llm_requests(
-        base_url=base_url,
-        model=model,
-        messages=messages,
-        headers=headers,
-        timeout_seconds=timeout_seconds,
-        verify_param=verify_param,
-        max_output_tokens=max_output_tokens,
-    )
-# pip install playwright
-# python -m playwright install chromium
 
 from playwright.sync_api import sync_playwright
 
@@ -865,7 +813,7 @@ def summarize_url(
         headers=headers,
         timeout_seconds=timeout_seconds,
         verify_param=verify_param,
-        max_output_tokens=700,
+        max_output_tokens=4096,
     )
 
     if not isinstance(llm_out, str):
@@ -963,7 +911,7 @@ except Exception as e:
 
 
 with st.sidebar:
-    model = st.text_input("Model", value=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+    model = st.text_input("Model", value=os.getenv("OPENAI_MODEL", "gemini-2.5-flash"))
 
     # --- New: Audience role & extra guidance ---
     audience = st.selectbox(
@@ -994,15 +942,10 @@ with tabs[0]:
     run_btn = st.button("Summarize", type="primary")
 
     if run_btn:
-        # if not url:
-        #     st.warning("Please provide a URL.")
-        # elif not base_url or not base_url.endswith("/v1"):
-        #     st.error("Base URL must end with /v1 (e.g., https://host/v1 or http://host:port/v1)")
-        # elif hdrs is None:
-        #     st.error("Fix header configuration errors in the sidebar.")
-        # elif not is_domain_allowed(url, allowed_domains):
-        #     st.error(f"URL domain is not in the allowlist: {allowed_domains}")
-        # else:
+            if not url or not (url.startswith("http://") or url.startswith("https://")):
+                st.error("Please enter a valid URL, including the 'http://' or 'https://' prefix.")
+                st.stop()
+
             res = None
             with st.status("Fetching and summarizing...", expanded=True) as status:
                 # 1) Upstream steps (fetch + extraction)
@@ -1072,159 +1015,3 @@ with tabs[0]:
                     st.download_button("⬇️ Download DOCX", data=doc_bytes,
                         file_name="summary.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-
-# ---- Batch Tab ----
-# with tabs[1]:
-    # st.subheader("Batch summarize (upload CSV with a 'url' column)")
-    # up = st.file_uploader("Upload CSV", type=["csv"])
-    # max_rows = st.number_input("Max rows to process", min_value=1, max_value=2000, value=50, step=1)
-    # run_batch = st.button("Run Batch", type="primary")
-
-    # if run_batch:
-    #     if not base_url or not base_url.endswith("/v1"):
-    #         st.error("Base URL must end with /v1.")
-    #     elif hdrs is None:
-    #         st.error("Fix header configuration errors in the sidebar.")
-    #     elif not up:
-    #         st.warning("Please upload a CSV file.")
-    #     else:
-    #         import pandas as pd
-    #         try:
-    #             df = pd.read_csv(up)
-    #         except Exception:
-    #             up.seek(0)
-    #             df = pd.read_csv(up, encoding="latin-1")
-    #         if "url" not in df.columns:
-    #             st.error("CSV must contain a 'url' column.")
-    #         else:
-    #             df = df.head(int(max_rows)).copy()
-    #             results: List[ExecSummary] = []
-    #             prog = st.progress(0.0, text="Processing...")
-    #             for i, row in df.iterrows():
-    #                 u = str(row["url"]).strip()
-    #                 if not u:
-    #                     continue
-    #                 if not is_domain_allowed(u, allowed_domains):
-    #                     results.append(ExecSummary(
-    #                         url=u, title=None, product=None,
-    #                         executive_summary="Skipped (domain not allowed).",
-    #                         key_highlights=[], resources_note=None, sample_resources=[]
-    #                     ))
-    #                     prog.progress((i + 1) / len(df))
-    #                     continue
-    #                 try:
-    #                     r = summarize_url(
-    #                         url=u,
-    #                         model=model,
-    #                         base_url=base_url,
-    #                         headers=hdrs,
-    #                         verify_param=verify_param,
-    #                         timeout_seconds=int(timeout_seconds),
-    #                         system_prompt=system_prompt,  # <-- reuse selected audience across batch
-    #                     )
-    #                     results.append(r)
-    #                 except Exception as e:
-    #                     results.append(ExecSummary(
-    #                         url=u, title=None, product=None,
-    #                         executive_summary=f"Error: {e}",
-    #                         key_highlights=[], resources_note=None, sample_resources=[]
-    #                     ))
-    #                 prog.progress((i + 1) / len(df))
-
-    #             # Show table
-    #             out = []
-    #             for r in results:
-    #                 out.append({
-    #                     "url": r.url,
-    #                     "title": r.title or "",
-    #                     "product": r.product or "",
-    #                     "executive_summary": r.executive_summary,
-    #                     "key_highlights": "\n".join(r.key_highlights),
-    #                     "resources_note": r.resources_note or "",
-    #                     "sample_resources": "\n".join(r.sample_resources),
-    #                 })
-    #             out_df = pd.DataFrame(out)
-    #             st.dataframe(out_df, use_container_width=True, hide_index=True)
-
-    #             # Downloads
-    #             csv_bytes = out_df.to_csv(index=False).encode("utf-8")
-    #             st.download_button("⬇️ Download CSV", data=csv_bytes, file_name="summaries.csv", mime="text/csv")
-
-    #             doc_bytes = build_docx(results)
-    #             st.download_button("⬇️ Download combined DOCX", data=doc_bytes,
-    #                 file_name="summaries.docx",
-    # mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-# ---- Gap analysis (dev) tab ----
-# with tabs[2]:
-    # st.subheader("Gap analysis / Page diagnostics (dev)")
-    # ga_url = st.text_input("Page URL (dev analysis)", placeholder="https://www.dell.com/...")
-    # colA, colB = st.columns(2)
-    # with colA:
-    #     enable_js_render = st.checkbox(
-    #         "Render JS if page looks client-side (Playwright)",
-    #         value=False,
-    #         help="Requires playwright installed; used only for this dev analysis."
-    #     )
-    # with colB:
-    #     ga_btn = st.button("Run gap analysis", type="secondary")
-
-    # if ga_btn:
-    #     if not ga_url:
-    #         st.warning("Please provide a URL.")
-    #     elif not is_domain_allowed(ga_url, allowed_domains):
-    #         st.error(f"URL domain is not in the allowlist: {allowed_domains}")
-    #     else:
-    #         # 1) fetch static
-    #         try:
-    #             final_url, html = fetch_url(ga_url, timeout=20, verify=verify_param)
-    #         except Exception as e:
-    #             st.error("Fetch failed.")
-    #             st.exception(e)
-    #             html = ""
-    #             final_url = ga_url
-
-    #         # 2) quick quality check
-    #         if html:
-    #             qa = analyze_html_quality(html, final_url)
-    #             need_render = (qa["word_count"] < 150) or (qa["text_html_ratio"] < 0.05)
-    #         else:
-    #             qa, need_render = None, False
-
-    #         # 3) optional render pass (dev only)
-    #         if enable_js_render and need_render:
-    #             try:
-    #                 final_url, html = fetch_url_rendered(final_url, timeout=25, ignore_https_errors=(verify_param is False))
-    #                 qa = analyze_html_quality(html, final_url)
-    #                 st.info("Rendered DOM fetched for analysis.")
-    #             except Exception as e:
-    #                 st.warning("JS rendering failed; showing static analysis.")
-    #                 st.exception(e)
-
-    #         # 4) render report
-    #         if html:
-    #             if not qa:
-    #                 qa = analyze_html_quality(html, final_url)
-
-    #             st.markdown("### Gap analysis report")
-    #             c1, c2, c3, c4 = st.columns(4)
-    #             c1.metric("Words", qa["word_count"])
-    #             c2.metric("Text/HTML", f"{qa['text_html_ratio']:.2%}")
-    #             c3.metric("Schema types", len(qa["schema_types"]))
-    #             c4.metric("Issues", len(qa["issues"]) + len(qa["warnings"]))
-
-    #             if qa["issues"]:
-    #                 st.error("**Critical issues:**\n\n- " + "\n- ".join(qa["issues"]))
-    #             if qa["warnings"]:
-    #                 st.warning("**Warnings:**\n\n- " + "\n- ".join(qa["warnings"]))
-    #             if qa["info"]:
-    #                 st.info("**Info:**\n\n- " + "\n- ".join(qa["info"]))
-
-    #             with st.expander("Samples / context", expanded=False):
-    #                 st.json(qa["samples"])
-
-    #             st.download_button(
-    #                 "⬇️ Download gap report (JSON)",
-    #                 data=json.dumps(qa, indent=2).encode("utf-8"),
-    #                 file_name="gap_report.json",
-    #                 mime="application/json",
-    #             )
