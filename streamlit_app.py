@@ -963,12 +963,14 @@ def build_docx(summaries: List[ExecSummary]) -> bytes:
 
 # ------------------------------ UI --------------------------------
 st.set_page_config(page_title="Executive Summarizer", page_icon="📝", layout="wide")
-client_ip = get_client_ip_reliable()
-check_ip_whitelist(client_ip)
-#     st.error(f"You have reached the limit of {ACCESS_LIMIT} accesses in 24 hours. Please try again in {wait_seconds//3600} hours.")
-#     st.stop()
-# else:
-#     st.info(f"Notice: You are limited to {ACCESS_LIMIT} accesses per 24 hours (based on your IP address). Remaining: {remaining}")
+ip = get_user_ip()
+allowed, remaining, wait_seconds = check_and_update_access(ip)
+if not allowed:
+    st.error(f"You have reached the limit of {ACCESS_LIMIT} accesses in 24 hours. Please try again in {wait_seconds//3600} hours.")
+    st.stop()
+else:
+    st.info(f"Notice: You are limited to {ACCESS_LIMIT} accesses per 24 hours (based on your IP address). Remaining: {remaining}")
+st.title("Executive Summarizer for Any Web page")
 st.title("Executive Summarizer for Any Web page")
 base_url=os.getenv("OPENAI_BASE_URL", "")
 # model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
