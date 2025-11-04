@@ -633,10 +633,23 @@ def call_llm(
         )
 
 
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+    _HAS_PLAYWRIGHT = True
+except Exception:
+    sync_playwright = None
+    _HAS_PLAYWRIGHT = False
+
 
 def fetch_url_rendered(url: str, timeout: int = 25, verify=True) -> Tuple[str, str]:
     # NOTE: 'verify' is not used here; Playwright manages TLS internally.
+    if not _HAS_PLAYWRIGHT:
+        
+        raise RuntimeError(
+            "Playwright is not installed. To enable JS rendering install it with: \n"
+            "pip install playwright\npython -m playwright install chromium"
+        )
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
@@ -931,6 +944,17 @@ with st.sidebar:
     # Optional: debugging aid
     with st.expander("Show effective system prompt", expanded=False):
         st.code(system_prompt, language="markdown")
+
+    # Playwright availability note
+    try:
+        _has_pw = _HAS_PLAYWRIGHT  # set earlier near fetch_url_rendered
+    except NameError:
+        _has_pw = False
+    if not _has_pw:
+        st.info(
+            "JS rendering (Playwright) is not available in this environment.\n"
+            "To enable it, install playwright: `pip install playwright` and run `python -m playwright install chromium`."
+        )
 
 # , "📦 Batch (CSV)", "🛠️ Gap analysis (dev)"]
 tabs = st.tabs(["🔗 Single URL"])

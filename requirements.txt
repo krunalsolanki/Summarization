@@ -9,3 +9,12 @@ beautifulsoup4
 lxml
 lxml_html_clean
 readability-lxml
+streamlit
+playwright
+requests
+pydantic
+# Add other packages from your project like:
+tenacity
+python-dotenv
+python-docx
+readability-lxml
