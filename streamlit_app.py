@@ -121,17 +121,36 @@ def save_access_tracker(tracker):
     with open(ACCESS_TRACK_FILE, "w") as f:
         _json.dump(tracker, f)
 
-def check_and_update_access(ip):
+def get_remaining_accesses(ip):
+    """Checks the limit without recording the access."""
     tracker = load_access_tracker()
     now = int(time.time())
     accesses = tracker.get(ip, [])
+    # Filter out old accesses
     accesses = [t for t in accesses if now - t < ACCESS_WINDOW_SECONDS]
-    if len(accesses) >= ACCESS_LIMIT:
-        return False, ACCESS_LIMIT, min(accesses) + ACCESS_WINDOW_SECONDS - now
+    
+    remaining = ACCESS_LIMIT - len(accesses)
+    
+    if remaining <= 0:
+        wait_time = min(accesses) + ACCESS_WINDOW_SECONDS - now if accesses else 0
+        return False, 0, wait_time
+        
+    return True, remaining, None
+
+def record_successful_access(ip):
+    """Records a single, successful access."""
+    tracker = load_access_tracker()
+    now = int(time.time())
+    accesses = tracker.get(ip, [])
+    
+    # Filter out old accesses (safety/cleanup)
+    accesses = [t for t in accesses if now - t < ACCESS_WINDOW_SECONDS]
+    
+    # Record the new access
     accesses.append(now)
     tracker[ip] = accesses
     save_access_tracker(tracker)
-    return True, ACCESS_LIMIT - len(accesses), None
+    return True
 
 
 class ExecSummary(BaseModel):
@@ -963,28 +982,26 @@ def build_docx(summaries: List[ExecSummary]) -> bytes:
 
 # ------------------------------ UI --------------------------------
 st.set_page_config(page_title="Executive Summarizer", page_icon="📝", layout="wide")
-# --- START: FIX for Inconsistent User ID ---
-# 1. Initialize a session-unique ID if one doesn't exist. 
-# This ID will be consistent for a single user for the duration of their session.
+# --- FIX: Ensure Consistent User ID per session (from previous step) ---
+import hashlib
 if 'rate_limit_user_id' not in st.session_state:
     st.session_state['rate_limit_user_id'] = hashlib.md5(str(time.time()).encode()).hexdigest()[:12]
 
-# 2. Use this persistent ID for rate limiting, or the actual IP if available.
-# NOTE: We keep get_user_ip() for environments that pass the actual IP (REMOTE_ADDR)
-# but for Streamlit Community Cloud deployments, we prefer the session state ID.
+# 1. Use the persistent ID for tracking (or the real IP if available).
 ip = get_user_ip()
-if len(ip) <= 8 and 'rate_limit_user_id' in st.session_state: # If we are using the short fallback ID, use the persistent one instead
+if len(ip) <= 8 and 'rate_limit_user_id' in st.session_state:
     ip = st.session_state['rate_limit_user_id']
+# --- END FIX ---
 
-# --- END: FIX for Inconsistent User ID ---
+# 2. CHECK the access limit (This is called on every page load/refresh)
+allowed, remaining, wait_seconds = get_remaining_accesses(ip)
 
-# The original rate limit logic (now using the persistent 'ip' identifier)
-allowed, remaining, wait_seconds = check_and_update_access(ip)
 if not allowed:
     st.error(f"You have reached the limit of {ACCESS_LIMIT} accesses in 24 hours. Please try again in {wait_seconds//3600} hours.")
     st.stop()
 else:
-    st.info(f"Notice: You are limited to {ACCESS_LIMIT} accesses per 24 hours (based on your IP address). Remaining: {remaining}")
+    st.info(f"Notice: You are limited to {ACCESS_LIMIT} accesses per 24 hours (based on your ID: `{ip}`). Remaining: {remaining}")
+    
 st.title("Executive Summarizer for Any Web page")
 base_url=os.getenv("OPENAI_BASE_URL", "")
 # model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -1050,10 +1067,11 @@ with tabs[0]:
     run_btn = st.button("Summarize", type="primary")
 
     if run_btn:
+            
             if not url or not (url.startswith("http://") or url.startswith("https://")):
                 st.error("Please enter a valid URL, including the 'http://' or 'https://' prefix.")
                 st.stop()
-
+            record_successful_access(ip)
             res = None
             with st.status("Fetching and summarizing...", expanded=True) as status:
                 # 1) Upstream steps (fetch + extraction)
