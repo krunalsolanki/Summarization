@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import re
 import io
@@ -15,7 +16,11 @@ from docx import Document as DocxDocument
 from docx.shared import Pt
 import requests
 
-
+ACCESS_LIMIT = 4
+ACCESS_WINDOW_SECONDS = 24 * 3600
+ALLOWED_CLIENT_IPS: List[str] = [
+    
+]
 # Try to reuse your working llm_client.py (optional)
 
 # Use Gemini API
@@ -40,6 +45,70 @@ def get_user_ip():
     if not ip:
         ip = hashlib.md5(str(st.session_state.get('run_id', time.time())).encode()).hexdigest()[:8]
     return ip
+
+def get_client_ip_reliable() -> str:
+    """
+    Attempts to get the client's IP address by prioritizing X-Forwarded-For header.
+    """
+    try:
+        # 1. Check Streamlit context headers for X-Forwarded-For (most common in deployed Streamlit)
+        # This is the most likely location for the true client IP behind a reverse proxy.
+        if 'context' in st.session_state and 'headers' in st.session_state.context:
+            headers = st.session_state.context.get('headers', {})
+            # X-Forwarded-For lists the client IP first, followed by proxies
+            x_forwarded_for = headers.get('X-Forwarded-For', '')
+            if x_forwarded_for:
+                return x_forwarded_for.split(',')[0].strip()
+
+        # 2. Fallback to native Streamlit context (v1.45.0+)
+        if hasattr(st, 'context') and hasattr(st.context, 'ip_address'):
+             if st.context.ip_address:
+                 return st.context.ip_address
+
+    except Exception:
+        pass # Fall through to the most basic check
+
+    # 3. Fallback to environment variable
+    ip_env = os.environ.get("REMOTE_ADDR")
+    if ip_env:
+        return ip_env
+
+    # Unreliable fallback
+    return "127.0.0.1"
+
+
+def check_ip_whitelist(client_ip: str):
+    """Checks if the client_ip is in the ALLOWED_CLIENT_IPS list or range and stops the app if not."""
+    if not ALLOWED_CLIENT_IPS:
+        # No IP restriction configured, allow access
+        return
+
+    try:
+        ip_addr = ipaddress.ip_address(client_ip)
+        is_allowed = False
+
+        for allowed in ALLOWED_CLIENT_IPS:
+            allowed = allowed.strip()
+            if not allowed: continue
+
+            if "/" in allowed:
+                # Check against an IP range (CIDR block)
+                if ip_addr in ipaddress.ip_network(allowed, strict=False):
+                    is_allowed = True
+                    break
+            elif str(ip_addr) == allowed:
+                # Check against a single IP
+                is_allowed = True
+                break
+
+        if not is_allowed:
+            st.error(f"⚠️ Access Restricted: Your IP address ({client_ip}) is not authorized to use this application.")
+            st.stop() # Immediately stop the script execution
+
+    except ValueError:
+        # Handle cases where the retrieved client_ip is not a valid IP address format
+        st.error("⚠️ Access Restricted: Security check failed (invalid IP format).")
+        st.stop()
 
 def load_access_tracker():
     try:
@@ -894,13 +963,12 @@ def build_docx(summaries: List[ExecSummary]) -> bytes:
 
 # ------------------------------ UI --------------------------------
 st.set_page_config(page_title="Executive Summarizer", page_icon="📝", layout="wide")
-ip = get_user_ip()
-allowed, remaining, wait_seconds = check_and_update_access(ip)
-if not allowed:
-    st.error(f"You have reached the limit of {ACCESS_LIMIT} accesses in 24 hours. Please try again in {wait_seconds//3600} hours.")
-    st.stop()
-else:
-    st.info(f"Notice: You are limited to {ACCESS_LIMIT} accesses per 24 hours (based on your IP address). Remaining: {remaining}")
+client_ip = get_client_ip_reliable()
+check_ip_whitelist(client_ip)
+#     st.error(f"You have reached the limit of {ACCESS_LIMIT} accesses in 24 hours. Please try again in {wait_seconds//3600} hours.")
+#     st.stop()
+# else:
+#     st.info(f"Notice: You are limited to {ACCESS_LIMIT} accesses per 24 hours (based on your IP address). Remaining: {remaining}")
 st.title("Executive Summarizer for Any Web page")
 base_url=os.getenv("OPENAI_BASE_URL", "")
 # model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
