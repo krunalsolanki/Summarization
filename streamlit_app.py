@@ -971,7 +971,6 @@ if not allowed:
 else:
     st.info(f"Notice: You are limited to {ACCESS_LIMIT} accesses per 24 hours (based on your IP address). Remaining: {remaining}")
 st.title("Executive Summarizer for Any Web page")
-st.title("Executive Summarizer for Any Web page")
 base_url=os.getenv("OPENAI_BASE_URL", "")
 # model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 api_key = os.getenv("OPENAI_API_KEY", "")
