@@ -963,7 +963,22 @@ def build_docx(summaries: List[ExecSummary]) -> bytes:
 
 # ------------------------------ UI --------------------------------
 st.set_page_config(page_title="Executive Summarizer", page_icon="📝", layout="wide")
+# --- START: FIX for Inconsistent User ID ---
+# 1. Initialize a session-unique ID if one doesn't exist. 
+# This ID will be consistent for a single user for the duration of their session.
+if 'rate_limit_user_id' not in st.session_state:
+    st.session_state['rate_limit_user_id'] = hashlib.md5(str(time.time()).encode()).hexdigest()[:12]
+
+# 2. Use this persistent ID for rate limiting, or the actual IP if available.
+# NOTE: We keep get_user_ip() for environments that pass the actual IP (REMOTE_ADDR)
+# but for Streamlit Community Cloud deployments, we prefer the session state ID.
 ip = get_user_ip()
+if len(ip) <= 8 and 'rate_limit_user_id' in st.session_state: # If we are using the short fallback ID, use the persistent one instead
+    ip = st.session_state['rate_limit_user_id']
+
+# --- END: FIX for Inconsistent User ID ---
+
+# The original rate limit logic (now using the persistent 'ip' identifier)
 allowed, remaining, wait_seconds = check_and_update_access(ip)
 if not allowed:
     st.error(f"You have reached the limit of {ACCESS_LIMIT} accesses in 24 hours. Please try again in {wait_seconds//3600} hours.")
